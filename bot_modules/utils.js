@@ -1,6 +1,7 @@
 let self = {js:{},data:{},requiredBy:[],hooks:{},config:{}};
 let data = {};
 let config = defaultConfigs;
+let rooms = null;
 const GOVERNING_ROOM = "";
 exports.GOVERNING_ROOM = GOVERNING_ROOM;
 
@@ -20,6 +21,7 @@ exports.onUnload = function(){
 };
 
 let refreshDependencies = function(){
+	rooms = getModuleForDependency("rooms", "utils");
 };
 exports.refreshDependencies = refreshDependencies;
 
@@ -39,7 +41,28 @@ exports.setConfig = function(newConfig){
 let commands = {
 	color: "colour",
 	colour: function(message, args, user, rank, room, commandRank, commandRoom){
-		room.broadcast(user, hashColour(toId(args[0])), rank);
+		let html = `<b>${args[0]}</b> name color: <b style='color: ${hashColour(toId(args[0]))}'>${hashColour(toId(args[0]))}</b>`;
+		// html is the HTML we seek to send to display the user's color
+		if(AuthManager.rankgeq(rank, room.broadcastRank) && room.name != ''){
+			// we can broadcast in the room, and it's not a PM!
+			room.broadcast(user, `/addhtmlbox ${html}`, rank);
+		}else{
+			// we have to send a PM
+			let targetRoom = null; // the room to use for pminfobox
+			for(const potentialRoom of rooms.getData().roomlist){ // look through rooms we're in
+				if(RoomManager.getRoom(potentialRoom).users[user.id]){
+					// the user is in the room
+					targetRoom = potentialRoom;
+					break; // we can stop since we know the room to use
+				}
+			}
+			if(targetRoom != null){
+				RoomManager.getRoom(targetRoom).send(`/pminfobox ${user.id}, ${html}`);
+				// this assumes we have Bot (*) in every room we're in
+			}else{ // we don't share a room with the user, so we can't send a html box.
+				user.send(`You must share a room with ${mainConfig.user} to use that command.`);
+			}
+		}
 	},
 	restart: function(message, args, user, rank, room, commandRank, commandRoom){
 		if(user.id === toId(mainConfig.owner)){
